@@ -20,8 +20,8 @@ A modern image search engine that uses CLIP (Contrastive Language-Image Pre-Trai
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd photobooth
+git clone https://github.com/itsfuad/SnapSeek
+cd SnapSeek
 ```
 
 2. Install dependencies:
