@@ -1,12 +1,9 @@
-import os
-import torch
 from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 from typing import List
-import numpy as np
 from PIL import Image
 import io
 

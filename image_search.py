@@ -1,9 +1,7 @@
 import torch
-import numpy as np
 from PIL import Image
 from typing import List, Dict
 from transformers import CLIPProcessor, CLIPModel
-from qdrant_client.http.models import SearchRequest
 from qdrant_singleton import QdrantClientSingleton
 
 class ImageSearch:
