@@ -1,3 +1,4 @@
 data
+qdrant_data
 __pycache__
 *.db

@@ -3,8 +3,8 @@ import numpy as np
 from PIL import Image
 from typing import List, Dict
 from transformers import CLIPProcessor, CLIPModel
-from qdrant_client import QdrantClient
 from qdrant_client.http.models import SearchRequest
+from qdrant_singleton import QdrantClientSingleton
 
 class ImageSearch:
     def __init__(self):
@@ -15,7 +15,12 @@ class ImageSearch:
         
         # Initialize Qdrant client
         self.collection_name = "images"
-        self.qdrant = QdrantClient(":memory:")  # Use in-memory storage -> QdrantClient(path="./qdrant_data")
+        self.qdrant = QdrantClientSingleton.get_instance()
+        
+        # Verify collection exists
+        collections = self.qdrant.get_collections()
+        if not any(col.name == self.collection_name for col in collections.collections):
+            print(f"Warning: Collection '{self.collection_name}' not found. Please add some images first.")
     
     async def search_by_text(self, query: str, k: int = 10) -> List[Dict]:
         """Search images by text query"""

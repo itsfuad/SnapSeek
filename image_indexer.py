@@ -10,10 +10,9 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from qdrant_client import QdrantClient
-from qdrant_client.http import models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from qdrant_client.http.models import PointStruct
 import uuid
+from qdrant_singleton import QdrantClientSingleton
 
 class ImageIndexer:
     def __init__(self):
@@ -28,7 +27,7 @@ class ImageIndexer:
         
         # Initialize Qdrant client
         self.collection_name = "images"
-        self.qdrant = QdrantClient(":memory:")  # Use in-memory storage for simplicity
+        self.qdrant = QdrantClientSingleton.get_instance()
         self.init_collection()
         
         # Thread pool for background processing
@@ -37,12 +36,7 @@ class ImageIndexer:
     def init_collection(self):
         """Initialize Qdrant collection for storing image vectors"""
         try:
-            # Create collection if it doesn't exist
-            self.qdrant.recreate_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=512, distance=Distance.COSINE),
-            )
-            print(f"Initialized Qdrant collection: {self.collection_name}")
+            QdrantClientSingleton.initialize_collection(self.collection_name)
         except Exception as e:
             print(f"Error initializing Qdrant collection: {e}")
     
