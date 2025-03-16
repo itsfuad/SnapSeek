@@ -22,6 +22,30 @@ class ImageSearch:
         if not any(col.name == self.collection_name for col in collections.collections):
             print(f"Warning: Collection '{self.collection_name}' not found. Please add some images first.")
     
+    def calculate_similarity_percentage(self, score: float) -> float:
+        """Convert cosine similarity score to percentage"""
+        # Qdrant returns cosine similarity scores between -1 and 1
+        # We want to convert this to a percentage between 0 and 100
+        # First normalize to 0-1 range, then convert to percentage
+        normalized = (score + 1) / 2
+        return normalized * 100
+
+    def filter_results(self, search_results: list, threshold: float = 0.5) -> List[Dict]:
+        """Filter and format search results"""
+        results = []
+        for scored_point in search_results:
+            # Convert cosine similarity to percentage
+            similarity = self.calculate_similarity_percentage(scored_point.score)
+            
+            # Only include results above threshold (50% similarity)
+            if similarity >= threshold:
+                results.append({
+                    "path": scored_point.payload["path"],
+                    "similarity": round(similarity, 1)  # Round to 1 decimal place
+                })
+        
+        return results
+    
     async def search_by_text(self, query: str, k: int = 10) -> List[Dict]:
         """Search images by text query"""
         try:
@@ -38,19 +62,13 @@ class ImageSearch:
             search_result = self.qdrant.search(
                 collection_name=self.collection_name,
                 query_vector=text_embedding.tolist(),
-                limit=k
+                limit=k,
+                score_threshold=0.0  # We'll filter results ourselves
             )
             
-            print(f"Found {len(search_result)} matches")
-            
-            # Convert results
-            results = []
-            for scored_point in search_result:
-                similarity = (scored_point.score + 1) * 50  # Convert to percentage
-                results.append({
-                    "path": scored_point.payload["path"],
-                    "similarity": similarity
-                })
+            # Filter and format results
+            results = self.filter_results(search_result, threshold=50)
+            print(f"Found {len(results)} relevant matches")
             
             return results
             
@@ -74,17 +92,13 @@ class ImageSearch:
             search_result = self.qdrant.search(
                 collection_name=self.collection_name,
                 query_vector=image_embedding.tolist(),
-                limit=k
+                limit=k,
+                score_threshold=0.0  # We'll filter results ourselves
             )
             
-            # Convert results
-            results = []
-            for scored_point in search_result:
-                similarity = (scored_point.score + 1) * 50  # Convert to percentage
-                results.append({
-                    "path": scored_point.payload["path"],
-                    "similarity": similarity
-                })
+            # Filter and format results
+            results = self.filter_results(search_result, threshold=50)
+            print(f"Found {len(results)} relevant matches")
             
             return results
             

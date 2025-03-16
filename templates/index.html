@@ -103,11 +103,16 @@
 
         function displayResults(results) {
             const resultsDiv = document.getElementById('results');
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<p class="text-center text-gray-500 mt-4">No matching images found</p>';
+                return;
+            }
+            
             resultsDiv.innerHTML = results.map(result => `
                 <div class="image-card shadow-lg">
                     <img src="/${result.path}" alt="Similar image">
                     <div class="similarity-score">
-                        ${Math.round(result.similarity * 100)}% match
+                        ${result.similarity}% match
                     </div>
                 </div>
             `).join('');
