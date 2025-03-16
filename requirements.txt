@@ -1,0 +1,13 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+torch==2.1.0
+torchvision==0.16.0
+transformers==4.35.2
+Pillow==10.1.0
+python-multipart==0.0.6
+faiss-cpu==1.7.4
+watchdog==3.0.0
+numpy==1.24.3
+python-magic==0.4.27
+aiofiles==23.2.1
+jinja2==3.1.2 

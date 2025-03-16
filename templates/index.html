@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Search Engine</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+        .image-card {
+            position: relative;
+            aspect-ratio: 1;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            transition: transform 0.2s;
+        }
+        .image-card:hover {
+            transform: scale(1.05);
+        }
+        .image-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .similarity-score {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8">Image Search Engine</h1>
+        
+        <!-- Search Forms -->
+        <div class="max-w-2xl mx-auto space-y-6 mb-8">
+            <!-- Text Search -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Search by Text</h2>
+                <form id="textSearchForm" class="space-y-4">
+                    <input type="text" id="textQuery" 
+                           class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Enter your search query...">
+                    <button type="submit" 
+                            class="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors">
+                        Search
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Image Search -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Search by Image</h2>
+                <form id="imageSearchForm" class="space-y-4">
+                    <input type="file" id="imageUpload" accept="image/*" class="w-full">
+                    <button type="submit" 
+                            class="w-full bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors">
+                        Upload & Search
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Results -->
+        <div id="results" class="image-grid"></div>
+    </div>
+
+    <script>
+        document.getElementById('textSearchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('textQuery').value;
+            const response = await fetch('/search/text?' + new URLSearchParams({query}));
+            const results = await response.json();
+            displayResults(results);
+        });
+
+        document.getElementById('imageSearchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('imageUpload').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/search/image', {
+                method: 'POST',
+                body: formData
+            });
+            const results = await response.json();
+            displayResults(results);
+        });
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = results.map(result => `
+                <div class="image-card shadow-lg">
+                    <img src="/${result.path}" alt="Similar image">
+                    <div class="similarity-score">
+                        ${Math.round(result.similarity * 100)}% match
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html> 
