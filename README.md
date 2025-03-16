@@ -50,7 +50,7 @@ python app.py
 ## Project Structure
 
 ```
-photobooth/
+SnapSeek/
 ├── app.py              # FastAPI application
 ├── data/              # Image storage directory
 ├── image_indexer.py   # Image indexing and monitoring
