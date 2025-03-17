@@ -76,6 +76,10 @@
                 <form class="d-flex" onsubmit="searchImages(event)">
                     <input class="form-control me-2" type="search" id="searchInput" placeholder="Search images...">
                     <button class="btn btn-outline-light" type="submit">Search</button>
+                    <label class="btn btn-outline-light ms-2 mb-0" for="imageUpload">
+                        <i class="bi bi-image"></i>
+                    </label>
+                    <input type="file" id="imageUpload" style="display: none" accept="image/*" onchange="searchByImage(event)">
                 </form>
             </div>
         </div>
@@ -318,8 +322,8 @@
                     item.href = '#';
                     item.className = `list-group-item list-group-item-action ${folder.is_valid ? '' : 'text-danger'}`;
                     item.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
+                        <div class="d-flex justify-content-between align-items-center" style="gap: 8px;">
+                            <div style="overflow: auto">
                                 <i class="bi bi-folder"></i>
                                 <span class="ms-2">${folder.path}</span>
                             </div>
@@ -425,6 +429,51 @@
                 });
             } catch (error) {
                 console.error('Error searching images:', error);
+                const imageGrid = document.getElementById('imageGrid');
+                imageGrid.innerHTML = '<div class="error text-center p-4">An error occurred while searching. Please try again.</div>';
+            }
+        }
+
+        // Search by image
+        async function searchByImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const searchUrl = '/search/image';
+                const response = await fetch(searchUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+                const results = await response.json();
+
+                const imageGrid = document.getElementById('imageGrid');
+                imageGrid.innerHTML = '';
+
+                if (results.length === 0) {
+                    imageGrid.innerHTML = '<div class="no-results text-center p-4">No similar images found.</div>';
+                    return;
+                }
+
+                results.forEach(result => {
+                    const card = document.createElement('div');
+                    card.className = 'image-card';
+                    card.innerHTML = `
+                        <img src="/files/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}" 
+                             alt="${result.path}"
+                             loading="lazy">
+                        <div class="similarity-score">${result.similarity}%</div>
+                    `;
+                    imageGrid.appendChild(card);
+                });
+
+                // Reset file input
+                event.target.value = '';
+            } catch (error) {
+                console.error('Error searching by image:', error);
                 const imageGrid = document.getElementById('imageGrid');
                 imageGrid.innerHTML = '<div class="error text-center p-4">An error occurred while searching. Please try again.</div>';
             }

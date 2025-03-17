@@ -138,10 +138,13 @@ class ImageSearch:
             all_results = []
             for collection_name in collections_to_search:
                 try:
+                    # Get more results from each collection when searching multiple collections
+                    collection_limit = k * 3 if len(collections_to_search) > 1 else k
+                    
                     search_result = self.qdrant.search(
                         collection_name=collection_name,
                         query_vector=image_embedding.tolist(),
-                        limit=k,
+                        limit=collection_limit,  # Get more results from each collection
                         offset=0,  # Explicitly set offset
                         score_threshold=0.0  # We'll filter results ourselves
                     )
@@ -149,6 +152,7 @@ class ImageSearch:
                     # Filter and format results
                     results = self.filter_results(search_result, threshold=50)
                     all_results.extend(results)
+                    print(f"Found {len(results)} matches in collection {collection_name}")
                 except Exception as e:
                     print(f"Error searching collection {collection_name}: {e}")
                     continue
@@ -158,7 +162,7 @@ class ImageSearch:
             
             # Take top k results
             final_results = all_results[:k]
-            print(f"Found {len(final_results)} relevant matches")
+            print(f"Found {len(final_results)} total relevant matches across {len(collections_to_search)} collections")
             
             return final_results
             
