@@ -180,9 +180,11 @@
             const container = document.getElementById(containerId);
             container.innerHTML = results.map(result => `
                 <div class="card mb-2">
-                    <img src="${result.path}" class="card-img-top" alt="Search result">
+                    <div class="similarity-score">${result.similarity}%</div>
+                    <img src="/data/${result.path}" class="card-img-top" alt="Search result">
                     <div class="card-body">
                         <p class="card-text">Path: ${result.path}</p>
+                        <a href="${result.absolute_path}" target="_blank" class="btn btn-primary">Open in location</a>
                     </div>
                 </div>
             `).join('');

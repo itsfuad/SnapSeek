@@ -39,6 +39,7 @@ class ImageSearch:
             if similarity >= threshold:
                 results.append({
                     "path": scored_point.payload["path"],
+                    "absolute_path": scored_point.payload["absolute_path"],
                     "similarity": round(similarity, 1)  # Round to 1 decimal place
                 })
         

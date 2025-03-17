@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import List
 from PIL import Image
 import io
-import asyncio
 from contextlib import asynccontextmanager
 
 from image_indexer import ImageIndexer

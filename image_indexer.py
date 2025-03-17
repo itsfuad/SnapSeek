@@ -11,9 +11,11 @@ from concurrent.futures import ThreadPoolExecutor, ThreadPoolExecutor
 import threading
 from qdrant_client.http.models import PointStruct
 import uuid
-from qdrant_singleton import QdrantClientSingleton
+from qdrant_singleton import QdrantClientSingleton, CURRENT_SCHEMA_VERSION
 from fastapi import WebSocket
 from enum import Enum
+import qdrant_client
+import time
 
 class IndexingStatus(Enum):
     IDLE = "idle"
@@ -32,7 +34,11 @@ class ImageIndexer:
         self.processed_files = 0
         self.websocket_connections: Set[WebSocket] = set()
         
-        # Initialize Qdrant client
+        # Thread synchronization
+        self.collection_initialized = threading.Event()
+        self.model_initialized = threading.Event()
+        
+        # Initialize Qdrant client and collection
         self.collection_name = "images"
         self.qdrant = QdrantClientSingleton.get_instance()
         self.init_collection()
@@ -47,8 +53,6 @@ class ImageIndexer:
         self.model = None
         self.processor = None
         self.device = None
-        self.model_initialized = False
-        self.model_lock = threading.Lock()
         
         # Start model initialization in a separate thread
         threading.Thread(target=self._initialize_model_thread, daemon=True).start()
@@ -59,8 +63,10 @@ class ImageIndexer:
             QdrantClientSingleton.initialize_collection(self.collection_name)
             # Load existing indexed paths
             self._load_indexed_paths()
+            self.collection_initialized.set()
         except Exception as e:
             print(f"Error initializing Qdrant collection: {e}")
+            raise  # Re-raise the exception to prevent further processing
     
     def _load_indexed_paths(self):
         """Load the set of already indexed paths from Qdrant"""
@@ -154,7 +160,7 @@ class ImageIndexer:
             print(f"Using device: {self.device}")
             self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
             self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-            self.model_initialized = True
+            self.model_initialized.set()
             print("Model initialization complete")
         except Exception as e:
             print(f"Error initializing model: {e}")
@@ -168,8 +174,7 @@ class ImageIndexer:
             print(f"Using device: {self.device}")
             self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
             self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-            with self.model_lock:
-                self.model_initialized = True
+            self.model_initialized.set()
             print("Model initialization complete")
         except Exception as e:
             print(f"Error initializing model: {e}")
@@ -179,13 +184,47 @@ class ImageIndexer:
     async def index_image(self, image_path: Path):
         """Index a single image"""
         try:
-            # Wait for model initialization if needed
-            while not self.model_initialized:
+            # Wait for both model and collection initialization
+            while not self.model_initialized.is_set():
                 await asyncio.sleep(0.1)
             
-            print(f"Indexing image: {image_path}")
-            self.current_file = str(image_path)
+            if not self.collection_initialized.is_set():
+                print("Waiting for collection initialization...")
+                self.collection_initialized.wait()
+            
+            # Convert to relative path from data directory
+            try:
+                relative_path = image_path.relative_to(self.data_dir)
+            except ValueError:
+                # If path is already relative or can't be made relative to data_dir
+                relative_path = image_path
+            
+            print(f"Indexing image: {relative_path}")
+            self.current_file = str(relative_path)
             await self.broadcast_status()
+            
+            # Check if image already exists in Qdrant with current schema version
+            existing_points = self.qdrant.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qdrant_client.http.models.Filter(
+                    must=[
+                        qdrant_client.http.models.FieldCondition(
+                            key="path",
+                            match={"value": str(relative_path)}
+                        ),
+                        qdrant_client.http.models.FieldCondition(
+                            key="schema_version",
+                            match={"value": CURRENT_SCHEMA_VERSION}
+                        )
+                    ]
+                ),
+                limit=1
+            )[0]
+            
+            # Skip if image exists with current schema version
+            if existing_points:
+                print(f"Skipping {relative_path} - already indexed with current schema version")
+                return
             
             # Load and preprocess image
             image = Image.open(image_path).convert("RGB")
@@ -201,10 +240,25 @@ class ImageIndexer:
             
             # Verify embedding is valid
             if np.isnan(embedding).any() or np.isinf(embedding).any():
-                print(f"Warning: Invalid embedding generated for {image_path}")
+                print(f"Warning: Invalid embedding generated for {relative_path}")
                 return
             
-            # Store in Qdrant
+            # Delete any old versions if they exist
+            self.qdrant.delete(
+                collection_name=self.collection_name,
+                points_selector=qdrant_client.http.models.FilterSelector(
+                    filter=qdrant_client.http.models.Filter(
+                        must=[
+                            qdrant_client.http.models.FieldCondition(
+                                key="path",
+                                match={"value": str(relative_path)}
+                            )
+                        ]
+                    )
+                )
+            )
+            
+            # Store in Qdrant with schema version and timestamp
             point_id = str(uuid.uuid4())
             self.qdrant.upsert(
                 collection_name=self.collection_name,
@@ -213,14 +267,16 @@ class ImageIndexer:
                         id=point_id,
                         vector=embedding.tolist(),
                         payload={
-                            "path": str(image_path),  # Relative path
-                            "absolute_path": str(image_path.absolute())  # Absolute path
+                            "path": str(relative_path),  # Relative path from data directory
+                            "absolute_path": str(image_path.absolute()),  # Absolute path
+                            "schema_version": CURRENT_SCHEMA_VERSION,
+                            "indexed_at": int(time.time())
                         }
                     )
                 ]
             )
-            self.indexed_paths.add(str(image_path))  # Add to cache
-            print(f"Stored embedding in Qdrant for {image_path}")
+            self.indexed_paths.add(str(relative_path))  # Add to cache using relative path
+            print(f"Stored embedding in Qdrant for {relative_path}")
             
         except Exception as e:
             print(f"Error indexing image {image_path}: {e}")
@@ -248,12 +304,20 @@ class ImageIndexer:
                 if path not in unique_images:
                     unique_images[path] = {
                         "path": path,  # Relative path
-                        "absolute_path": point.payload["absolute_path"]  # Absolute path
+                        "absolute_path": point.payload["absolute_path"],  # Absolute path
+                        "indexed_at": point.payload.get("indexed_at", 0)  # Include timestamp
                     }
             
-            return list(unique_images.values())
+            # Convert to list and sort by indexed_at timestamp (newest first)
+            images = list(unique_images.values())
+            images.sort(key=lambda x: x["indexed_at"], reverse=True)
+            
+            return images
+            
         except Exception as e:
             print(f"Error getting images: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
 class ImageEventHandler(FileSystemEventHandler):
