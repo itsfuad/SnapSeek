@@ -385,6 +385,12 @@
             }
         }
 
+        // Get current folder path
+        function getCurrentPath() {
+            // Return the current path if we're in a folder, otherwise null
+            return currentPath;
+        }
+
         // Search images
         async function searchImages(event) {
             event.preventDefault();
@@ -392,11 +398,19 @@
             if (!query) return;
 
             try {
-                const response = await fetch(`/search/text?query=${encodeURIComponent(query)}`);
+                // Only include folder parameter if we're inside the folder browser
+                const folderBrowser = document.getElementById('folderBrowser');
+                const searchUrl = `/search/text?query=${encodeURIComponent(query)}`;
+                const response = await fetch(searchUrl);
                 const results = await response.json();
 
                 const imageGrid = document.getElementById('imageGrid');
                 imageGrid.innerHTML = '';
+
+                if (results.length === 0) {
+                    imageGrid.innerHTML = '<div class="no-results text-center p-4">No images found matching your search.</div>';
+                    return;
+                }
 
                 results.forEach(result => {
                     const card = document.createElement('div');
@@ -411,6 +425,8 @@
                 });
             } catch (error) {
                 console.error('Error searching images:', error);
+                const imageGrid = document.getElementById('imageGrid');
+                imageGrid.innerHTML = '<div class="error text-center p-4">An error occurred while searching. Please try again.</div>';
             }
         }
 

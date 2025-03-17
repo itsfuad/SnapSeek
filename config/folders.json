@@ -2,7 +2,13 @@
   "D:\\takeout-20250310T101938Z-001\\Takeout\\Google Photos\\Photos from 2025": {
     "path": "D:\\takeout-20250310T101938Z-001\\Takeout\\Google Photos\\Photos from 2025",
     "collection_name": "images_0",
-    "added_at": 1742245953,
-    "last_indexed": 1742245964
+    "added_at": 1742246157,
+    "last_indexed": 1742246165
+  },
+  "D:\\dev\\python\\photobooth\\data": {
+    "path": "D:\\dev\\python\\photobooth\\data",
+    "collection_name": "images_1",
+    "added_at": 1742246284,
+    "last_indexed": 1742246305
   }
 }
