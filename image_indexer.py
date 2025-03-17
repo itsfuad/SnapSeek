@@ -7,7 +7,8 @@ from transformers import CLIPProcessor, CLIPModel
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ThreadPoolExecutor
+import threading
 from qdrant_client.http.models import PointStruct
 import uuid
 from qdrant_singleton import QdrantClientSingleton
@@ -47,6 +48,10 @@ class ImageIndexer:
         self.processor = None
         self.device = None
         self.model_initialized = False
+        self.model_lock = threading.Lock()
+        
+        # Start model initialization in a separate thread
+        threading.Thread(target=self._initialize_model_thread, daemon=True).start()
     
     def init_collection(self):
         """Initialize Qdrant collection for storing image vectors"""
@@ -134,6 +139,13 @@ class ImageIndexer:
         observer.start()
         self.status = IndexingStatus.MONITORING
         print("Started monitoring data directory for changes")
+        
+        # Start indexing in a separate thread
+        threading.Thread(target=self._index_existing_images_thread, daemon=True).start()
+    
+    def _index_existing_images_thread(self):
+        """Index existing images in a separate thread"""
+        asyncio.run(self.index_existing_images())
     
     async def initialize_model(self):
         """Initialize CLIP model and processor in the background"""
@@ -149,12 +161,27 @@ class ImageIndexer:
             self.status = IndexingStatus.IDLE
             await self.broadcast_status()
     
+    def _initialize_model_thread(self):
+        """Initialize model in a separate thread"""
+        try:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Using device: {self.device}")
+            self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
+            self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+            with self.model_lock:
+                self.model_initialized = True
+            print("Model initialization complete")
+        except Exception as e:
+            print(f"Error initializing model: {e}")
+            self.status = IndexingStatus.IDLE
+            asyncio.run(self.broadcast_status())
+    
     async def index_image(self, image_path: Path):
         """Index a single image"""
         try:
             # Wait for model initialization if needed
-            if not self.model_initialized:
-                await self.initialize_model()
+            while not self.model_initialized:
+                await asyncio.sleep(0.1)
             
             print(f"Indexing image: {image_path}")
             self.current_file = str(image_path)

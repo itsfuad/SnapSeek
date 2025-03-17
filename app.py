@@ -19,11 +19,8 @@ searcher = ImageSearch()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the image indexer and start monitoring the data directory"""
-    # Start monitoring immediately
+    # Start monitoring (this will also start indexing in a separate thread)
     indexer.start_monitoring()
-    # Start model initialization and indexing in the background
-    asyncio.create_task(indexer.initialize_model())
-    asyncio.create_task(indexer.index_existing_images())
     yield
 
 app = FastAPI(title="Image Search Engine", lifespan=lifespan)
