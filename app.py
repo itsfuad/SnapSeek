@@ -21,7 +21,8 @@ async def lifespan(app: FastAPI):
     """Initialize the image indexer and start monitoring the data directory"""
     # Start monitoring immediately
     indexer.start_monitoring()
-    # Start indexing in the background without waiting
+    # Start model initialization and indexing in the background
+    asyncio.create_task(indexer.initialize_model())
     asyncio.create_task(indexer.index_existing_images())
     yield
 

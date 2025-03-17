@@ -24,11 +24,12 @@ class ImageIndexer:
         self.data_dir = Path("data")
         self.data_dir.mkdir(exist_ok=True)
         
-        # Initialize CLIP model and processor
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Using device: {self.device}")
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        # Initialize status tracking
+        self.status = IndexingStatus.IDLE
+        self.current_file: Optional[str] = None
+        self.total_files = 0
+        self.processed_files = 0
+        self.websocket_connections: Set[WebSocket] = set()
         
         # Initialize Qdrant client
         self.collection_name = "images"
@@ -41,12 +42,11 @@ class ImageIndexer:
         # Cache of indexed paths
         self.indexed_paths = set()
         
-        # Status tracking
-        self.status = IndexingStatus.IDLE
-        self.current_file: Optional[str] = None
-        self.total_files = 0
-        self.processed_files = 0
-        self.websocket_connections: Set[WebSocket] = set()
+        # Model initialization flags
+        self.model = None
+        self.processor = None
+        self.device = None
+        self.model_initialized = False
     
     def init_collection(self):
         """Initialize Qdrant collection for storing image vectors"""
@@ -135,9 +135,27 @@ class ImageIndexer:
         self.status = IndexingStatus.MONITORING
         print("Started monitoring data directory for changes")
     
+    async def initialize_model(self):
+        """Initialize CLIP model and processor in the background"""
+        try:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Using device: {self.device}")
+            self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
+            self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+            self.model_initialized = True
+            print("Model initialization complete")
+        except Exception as e:
+            print(f"Error initializing model: {e}")
+            self.status = IndexingStatus.IDLE
+            await self.broadcast_status()
+    
     async def index_image(self, image_path: Path):
         """Index a single image"""
         try:
+            # Wait for model initialization if needed
+            if not self.model_initialized:
+                await self.initialize_model()
+            
             print(f"Indexing image: {image_path}")
             self.current_file = str(image_path)
             await self.broadcast_status()
@@ -196,13 +214,17 @@ class ImageIndexer:
                 with_vectors=False
             )
             
-            return [
-                {
-                    "path": point.payload["path"],  # Relative path
-                    "absolute_path": point.payload["absolute_path"]  # Absolute path
-                }
-                for point in response[0]
-            ]
+            # Use a dictionary to ensure unique paths
+            unique_images = {}
+            for point in response[0]:
+                path = point.payload["path"]
+                if path not in unique_images:
+                    unique_images[path] = {
+                        "path": path,  # Relative path
+                        "absolute_path": point.payload["absolute_path"]  # Absolute path
+                    }
+            
+            return list(unique_images.values())
         except Exception as e:
             print(f"Error getting images: {e}")
             return []
