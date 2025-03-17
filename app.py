@@ -6,16 +6,23 @@ from pathlib import Path
 from typing import List
 from PIL import Image
 import io
+import asyncio
 from contextlib import asynccontextmanager
 
 from image_indexer import ImageIndexer
 from image_search import ImageSearch
 
+# Initialize image indexer and searcher
+indexer = ImageIndexer()
+searcher = ImageSearch()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the image indexer and start monitoring the data directory"""
+    # Start monitoring immediately
     indexer.start_monitoring()
-    await indexer.index_existing_images()
+    # Start indexing in the background without waiting
+    asyncio.create_task(indexer.index_existing_images())
     yield
 
 app = FastAPI(title="Image Search Engine", lifespan=lifespan)
@@ -29,16 +36,21 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/data", StaticFiles(directory="data"), name="data")
 
-# Initialize image indexer and searcher
-indexer = ImageIndexer()
-searcher = ImageSearch()
-
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the home page"""
     return templates.TemplateResponse(
         "index.html",
-        {"request": request}
+        {
+            "request": request,
+            "initial_status": {
+                "status": indexer.status.value,
+                "current_file": indexer.current_file,
+                "total_files": indexer.total_files,
+                "processed_files": indexer.processed_files,
+                "progress_percentage": round((indexer.processed_files / indexer.total_files * 100) if indexer.total_files > 0 else 0, 2)
+            }
+        }
     )
 
 @app.get("/search/text")
