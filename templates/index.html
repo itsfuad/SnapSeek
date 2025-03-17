@@ -56,6 +56,12 @@
         .folder-item i {
             margin-right: 0.5rem;
         }
+        #indexingStatus {
+            transition: opacity 0.5s ease-in-out;
+        }
+        .progress-bar {
+            transition: width 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -155,12 +161,23 @@
         // Initialize WebSocket connection
         function connectWebSocket() {
             ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+            };
+            
             ws.onmessage = function(event) {
                 const status = JSON.parse(event.data);
                 updateIndexingStatus(status);
             };
+            
             ws.onclose = function() {
+                console.log('WebSocket disconnected, attempting to reconnect...');
                 setTimeout(connectWebSocket, 1000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
             };
         }
 
@@ -171,19 +188,35 @@
             const details = document.getElementById('indexingDetails');
 
             if (status.status === 'idle') {
-                statusDiv.style.display = 'none';
+                // Fade out the status div
+                statusDiv.style.opacity = '0';
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                    statusDiv.style.opacity = '1';
+                }, 500);
                 return;
             }
 
+            // Show and update the status
             statusDiv.style.display = 'block';
-            progressBar.style.width = `${status.progress_percentage}%`;
-            progressBar.setAttribute('aria-valuenow', status.progress_percentage);
+            statusDiv.style.opacity = '1';
+            
+            // Calculate progress percentage
+            const percentage = status.total_files > 0 
+                ? Math.round((status.processed_files / status.total_files) * 100)
+                : 0;
+            
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
 
+            // Update status text
             let statusText = `Status: ${status.status}`;
             if (status.current_file) {
                 statusText += ` | Current file: ${status.current_file}`;
             }
-            statusText += ` | Progress: ${status.processed_files}/${status.total_files}`;
+            if (status.total_files > 0) {
+                statusText += ` | Progress: ${status.processed_files}/${status.total_files} (${percentage}%)`;
+            }
             details.textContent = statusText;
         }
 
@@ -281,6 +314,9 @@
 
         // Add selected folder
         async function addSelectedFolder() {
+
+            folderModal.hide();
+
             if (!selectedFolder && currentPath) {
                 selectedFolder = currentPath;
             }
@@ -293,7 +329,6 @@
                     });
 
                     if (response.ok) {
-                        folderModal.hide();
                         await loadIndexedFolders();
                         selectedFolder = null;
                     } else {

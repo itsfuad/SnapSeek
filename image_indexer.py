@@ -120,9 +120,16 @@ class ImageIndexer:
             print(f"No collection found for folder: {folder_path}")
             return
         
+        # Wait for model initialization before starting indexing
+        while not self.model_initialized.is_set():
+            print("Waiting for model initialization...")
+            await asyncio.sleep(0.1)
+        
         print(f"Starting to index folder: {folder_path}")
         self.status = IndexingStatus.INDEXING
         self.processed_files = 0
+        self.current_file = None
+        await self.broadcast_status()  # Broadcast initial status
         
         # Load indexed paths for this collection if not already loaded
         if collection_name not in self.indexed_paths:
@@ -132,27 +139,40 @@ class ImageIndexer:
         image_files = [f for f in folder_path.rglob("*") if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}]
         self.total_files = len(image_files)
         print(f"Found {self.total_files} images to index")
+        await self.broadcast_status()  # Broadcast after finding total files
         
-        for i, image_file in enumerate(image_files, 1):
-            relative_path = str(image_file.relative_to(folder_path))
-            if relative_path not in self.indexed_paths[collection_name]:
+        try:
+            for i, image_file in enumerate(image_files, 1):
+                relative_path = str(image_file.relative_to(folder_path))
                 self.current_file = str(image_file)
-                print(f"Indexing image {i}/{self.total_files}: {image_file.name}")
-                await self.index_image(image_file, folder_path)
-                self.processed_files = i
-                await self.broadcast_status()
-            else:
-                print(f"Skipping already indexed image {i}/{self.total_files}: {image_file.name}")
-                self.processed_files = i
-                await self.broadcast_status()
+                self.processed_files = i - 1  # Update before processing
+                await self.broadcast_status()  # Broadcast before processing each file
+                
+                if relative_path not in self.indexed_paths[collection_name]:
+                    print(f"Indexing image {i}/{self.total_files}: {image_file.name}")
+                    await self.index_image(image_file, folder_path)
+                else:
+                    print(f"Skipping already indexed image {i}/{self.total_files}: {image_file.name}")
+                
+                self.processed_files = i  # Update after processing
+                await self.broadcast_status()  # Broadcast after processing each file
+                
+                # Small delay to allow other tasks to run
+                await asyncio.sleep(0)
         
-        # Update last indexed timestamp
-        self.folder_manager.update_last_indexed(str(folder_path))
-        
-        self.status = IndexingStatus.MONITORING
-        self.current_file = None
-        await self.broadcast_status()
-        print("Finished indexing folder")
+        except Exception as e:
+            print(f"Error during indexing: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # Update last indexed timestamp
+            self.folder_manager.update_last_indexed(str(folder_path))
+            
+            # Reset status
+            self.status = IndexingStatus.MONITORING
+            self.current_file = None
+            await self.broadcast_status()  # Final status broadcast
+            print("Finished indexing folder")
     
     async def index_image(self, image_path: Path, root_folder: Path):
         """Index a single image"""
@@ -176,7 +196,7 @@ class ImageIndexer:
             
             print(f"Indexing image: {relative_path}")
             self.current_file = str(image_path)
-            await self.broadcast_status()
+            await self.broadcast_status()  # Broadcast current file
             
             # Check if image already exists in Qdrant with current schema version
             existing_points = self.qdrant.scroll(
@@ -264,8 +284,8 @@ class ImageIndexer:
             import traceback
             traceback.print_exc()
         finally:
-            self.current_file = None
-            await self.broadcast_status()
+            # Don't reset current_file here as it's managed by index_folder
+            await self.broadcast_status()  # Broadcast status after processing
     
     def _initialize_model_thread(self):
         """Initialize model in a separate thread"""

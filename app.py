@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, File, UploadFile, Request, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -46,10 +46,15 @@ async def home(request: Request):
     )
 
 @app.post("/folders")
-async def add_folder(folder_path: str):
+async def add_folder(folder_path: str, background_tasks: BackgroundTasks):
     """Add a new folder to index"""
     try:
-        folder_info = await indexer.add_folder(folder_path)
+        # Add folder to manager first (this creates the collection)
+        folder_info = indexer.folder_manager.add_folder(folder_path)
+        
+        # Start indexing in the background
+        background_tasks.add_task(indexer.index_folder, folder_path)
+        
         return folder_info
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
