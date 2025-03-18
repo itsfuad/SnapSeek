@@ -285,7 +285,6 @@ async function searchImages(event) {
 
     try {
         // Only include folder parameter if we're inside the folder browser
-        const folderBrowser = document.getElementById('folderBrowser');
         const searchUrl = `/search/text?query=${encodeURIComponent(query)}`;
         const response = await fetch(searchUrl);
         const results = await response.json();
