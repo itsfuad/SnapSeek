@@ -4,10 +4,10 @@ A modern image search engine that uses CLIP (Contrastive Language-Image Pre-Trai
 
 ## Features
 
-- 🖼️ **Auto-Indexing**: Automatically indexes images from the `data` folder
+- 🖼️ **Auto-Indexing**: Automatically indexes images from the selected folders
 - 🔍 **Text Search**: Find images using natural language descriptions
 - 📸 **Image Search**: Find similar images by uploading a reference image
-- ⚡ **Real-time Updates**: Monitors the data folder for new images and indexes them automatically
+- ⚡ **Real-time Updates**: Monitors the all folders for new images and indexes them automatically
 - 🎯 **High Accuracy**: Uses OpenAI's CLIP model for high-quality image-text matching
 - 📊 **Similarity Scores**: Shows match percentage for each result
 
