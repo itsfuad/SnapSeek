@@ -24,94 +24,66 @@ git clone https://github.com/itsfuad/SnapSeek
 cd SnapSeek
 ```
 
-2. Install dependencies:
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-1. **Prepare Your Images**:
-   - Place your images in the `data` folder
-   - Supported formats: JPG, JPEG, PNG, GIF
-
-2. **Start the Server**:
+1. Start the backend server:
 ```bash
-python app.py
+python main.py
 ```
-   - The server will start at `http://localhost:8000`
-   - Images will be automatically indexed on startup
 
-3. **Using the Interface**:
-   - Open your browser and go to `http://localhost:8000`
-   - Use the text search box to find images by description
-   - Use the image upload to find similar images
+2. Open your browser and navigate to:
+```
+http://localhost:8000
+```
+
+3. Add your photo folders and start searching!
+
+## Development
+
+### Running Tests
+
+1. Install test dependencies:
+```bash
+pip install -r requirements-test.txt
+```
+
+2. Run the tests:
+```bash
+pytest tests/ -v
+```
+
+### GitHub Actions
+
+The project includes GitHub Actions workflows for automated testing:
+- Tests run on every push to main branch
+- Tests run on every pull request to main branch
+- Uses Python 3.11 on Ubuntu latest
+- Installs dependencies from both `requirements.txt` and `requirements-test.txt`
 
 ## Project Structure
 
 ```
-SnapSeek/
-├── app.py              # FastAPI application
-├── data/              # Image storage directory
-├── image_indexer.py   # Image indexing and monitoring
-├── image_search.py    # Search functionality
-├── qdrant_singleton.py # Vector database client
-├── requirements.txt   # Python dependencies
-├── static/           # Static files
-└── templates/        # HTML templates
+Project
+├── main.py              # FastAPI application entry point
+├── requirements.txt     # Main dependencies
+├── requirements-test.txt # Test dependencies
+├── templates/          # Frontend templates
+├── static/            # Static assets
+├── tests/             # Test files
+└── .github/
+    └── workflows/     # GitHub Actions workflows
 ```
-
-## Technical Details
-
-- **Frontend**: HTML + Tailwind CSS
-- **Backend**: FastAPI
-- **Image Processing**: CLIP (Contrastive Language-Image Pre-Training)
-- **Vector Database**: Qdrant
-- **Image Monitoring**: Watchdog
-
-## How It Works
-
-1. **Indexing**:
-   - Images are processed through the CLIP model
-   - Generates 512-dimensional feature vectors
-   - Vectors are stored in Qdrant for fast similarity search
-
-2. **Text Search**:
-   - Text query is converted to a feature vector using CLIP
-   - Vector similarity search finds matching images
-   - Results are ranked by similarity score
-
-3. **Image Search**:
-   - Uploaded image is processed through CLIP
-   - Similar images are found using vector similarity
-   - Results show percentage match scores
-
-## Performance Notes
-
-- First-time startup might be slower due to CLIP model download
-- Search performance depends on dataset size
-- GPU acceleration is automatic if available
-
-## Limitations
-
-- Best results with a diverse image dataset
-- Similarity scores may vary based on dataset size
-- Memory usage increases with the number of indexed images
-
-## Future Improvements
-
-- Add image metadata storage
-- Implement image tagging
-- Add batch processing for large datasets
-- Add image preprocessing options
-- Implement result filtering and categorization
-
-## Troubleshooting
-
-1. **No Images Found**:
-   - Check if images are in the `data` folder
-   - Verify supported image formats
-   - Check console for indexing errors
 
 2. **Poor Search Results**:
    - Try more specific search queries
