@@ -44,7 +44,7 @@ class ImageIndexer:
         
         # Thread pool for background processing
         self.executor = ThreadPoolExecutor(max_workers=4)
-        
+    
         # Cache of indexed paths per collection
         self.indexed_paths: Dict[str, Set[str]] = {}
         
