@@ -1,20 +1,30 @@
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from pathlib import Path
+import os
 
 CURRENT_SCHEMA_VERSION = "1.0"  # Increment this when schema changes
 VECTOR_SIZE = 512  # CLIP embedding size
 
 class QdrantClientSingleton:
     _instance = None
+    # Use path relative to current working directory
+    _storage_path = Path("qdrant_data").absolute()
 
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            # Use persistent storage in the data directory
-            storage_path = Path("./qdrant_data")
-            storage_path.mkdir(exist_ok=True)
-            cls._instance = QdrantClient(path=str(storage_path))
+            print(f"Initializing Qdrant with storage path: {cls._storage_path}")
+            # Ensure storage directory exists
+            cls._storage_path.mkdir(exist_ok=True)
+            
+            # Initialize client with persistent storage
+            cls._instance = QdrantClient(path=str(cls._storage_path))
+            
+            # Print collections for debugging
+            collections = cls._instance.get_collections().collections
+            print(f"Available collections: {[col.name for col in collections]}")
+        
         return cls._instance
 
     @classmethod
