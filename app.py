@@ -1,12 +1,13 @@
+import os
+from pathlib import Path
+from typing import List, Optional
+import io
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Request, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pathlib import Path
-from typing import List, Optional
 from PIL import Image
-import io
-from contextlib import asynccontextmanager
 
 from image_indexer import ImageIndexer
 from image_search import ImageSearch
@@ -15,8 +16,10 @@ from image_search import ImageSearch
 indexer = ImageIndexer()
 searcher = ImageSearch()
 
+image_extensions = [".jpg", ".jpeg", ".png", ".gif"]
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     """Initialize the image indexer"""
     yield
 
@@ -57,7 +60,7 @@ async def add_folder(folder_path: str, background_tasks: BackgroundTasks):
         
         return folder_info
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 @app.delete("/folders/{folder_path:path}")
 async def remove_folder(folder_path: str):
@@ -66,7 +69,7 @@ async def remove_folder(folder_path: str):
         await indexer.remove_folder(folder_path)
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 @app.get("/folders")
 async def list_folders():
@@ -120,67 +123,65 @@ async def serve_file(folder_path: str, file_path: str):
             raise HTTPException(status_code=404, detail="File not found")
         
         # Only serve image files
-        if full_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".gif"}:
+        if full_path.suffix.lower() not in image_extensions:
             raise HTTPException(status_code=400, detail="Invalid file type")
         
         return FileResponse(full_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+def get_windows_drives():
+    """Get available drives on Windows"""
+    from ctypes import windll
+    drives = []
+    bitmask = windll.kernel32.GetLogicalDrives()
+    for letter in range(65, 91):  # A-Z
+        if bitmask & (1 << (letter - 65)):
+            drives.append(chr(letter) + ":\\")
+    return drives
+
+def get_directory_item(item):
+    """Get directory item info"""
+    try:
+        is_dir = item.is_dir()
+        if is_dir or item.suffix.lower() in image_extensions:
+            return {
+                "name": item.name,
+                "path": str(item.absolute()),
+                "type": "directory" if is_dir else "file",
+                "size": item.stat().st_size if not is_dir else None
+            }
+    except Exception:
+        pass
+    return None
+
+def get_directory_contents(path: str):
+    """Get contents of a directory"""
+    try:
+        path_obj = Path(path)
+        if not path_obj.exists():
+            return {"error": "Path does not exist"}
+        
+        parent = str(path_obj.parent) if path_obj.parent != path_obj else None
+        contents = [
+            item for item in (get_directory_item(i) for i in path_obj.iterdir())
+            if item is not None
+        ]
+        
+        return {
+            "current_path": str(path_obj.absolute()),
+            "parent_path": parent,
+            "contents": sorted(contents, key=lambda x: (x["type"] != "directory", x["name"].lower()))
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/browse")
 async def browse_folders():
     """Browse system folders"""
-    # This is a simplified example - you might want to add more security checks
-    import os
-    
-    def get_drives():
-        """Get available drives on Windows"""
-        from ctypes import windll
-        drives = []
-        bitmask = windll.kernel32.GetLogicalDrives()
-        for letter in range(65, 91):  # A-Z
-            if bitmask & (1 << (letter - 65)):
-                drive = chr(letter) + ":\\"
-                drives.append(drive)
-        return drives
-    
-    def get_directory_contents(path: str):
-        try:
-            path_obj = Path(path)
-            if not path_obj.exists():
-                return {"error": "Path does not exist"}
-            
-            # Get parent directory for navigation
-            parent = str(path_obj.parent) if path_obj.parent != path_obj else None
-            
-            # List directories and files
-            contents = []
-            for item in path_obj.iterdir():
-                try:
-                    is_dir = item.is_dir()
-                    if is_dir or item.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}:
-                        contents.append({
-                            "name": item.name,
-                            "path": str(item.absolute()),
-                            "type": "directory" if is_dir else "file",
-                            "size": item.stat().st_size if not is_dir else None
-                        })
-                except Exception:
-                    continue  # Skip items we can't access
-            
-            return {
-                "current_path": str(path_obj.absolute()),
-                "parent_path": parent,
-                "contents": sorted(contents, key=lambda x: (x["type"] != "directory", x["name"].lower()))
-            }
-        except Exception as e:
-            return {"error": str(e)}
-    
-    # Handle root directory differently on Windows vs Unix
     if os.name == "nt":  # Windows
-        return {"drives": get_drives()}
-    else:  # Unix-like
-        return get_directory_contents("/")
+        return {"drives": get_windows_drives()}
+    return get_directory_contents("/")  # Unix-like
 
 @app.get("/browse/{path:path}")
 async def browse_path(path: str):
@@ -198,7 +199,7 @@ async def browse_path(path: str):
         for item in path_obj.iterdir():
             try:
                 is_dir = item.is_dir()
-                if is_dir or item.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}:
+                if is_dir or item.suffix.lower() in image_extensions:
                     contents.append({
                         "name": item.name,
                         "path": str(item.absolute()),
@@ -214,7 +215,7 @@ async def browse_path(path: str):
             "contents": sorted(contents, key=lambda x: (x["type"] != "directory", x["name"].lower()))
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 if __name__ == "__main__":
     import uvicorn

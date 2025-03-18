@@ -81,6 +81,71 @@ function openFolderBrowser() {
     loadFolderContents();
 }
 
+function showDrives(breadcrumb, browser, data) {
+    // Windows drives
+    breadcrumb.innerHTML = '<li class="breadcrumb-item active">Drives</li>';
+    data.drives.forEach(drive => {
+        const escapedDrive = drive.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        browser.innerHTML += `
+                    <div class="folder-item" onclick="loadFolderContents('${escapedDrive}')">
+                        <i class="bi bi-hdd"></i>${drive}
+                    </div>
+                `;
+    });
+}
+
+function showFolderContents(breadcrumb, browser, data) {
+    // Folder contents
+    currentPath = data.current_path;
+
+    // Update breadcrumb
+    const pathParts = currentPath.split(/[\\/]/);
+    let currentBreadcrumb = '';
+    pathParts.forEach((part, index) => {
+        if (part) {
+            // Check if the path contains backslashes to detect Windows
+            const isWindows = currentPath.includes('\\');
+            currentBreadcrumb += part + (isWindows ? '\\' : '/');
+            const isLast = index === pathParts.length - 1;
+            const escapedPath = currentBreadcrumb.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            breadcrumb.innerHTML += `
+                                    <li class="breadcrumb-item ${isLast ? 'active' : ''}">
+                                        ${isLast ? part : `<a href="#" onclick="loadFolderContents('${escapedPath}')">${part}</a>`}
+                                    </li>
+                                `;
+        }
+    });
+
+    // Add parent directory
+    if (data.parent_path) {
+        addParentDirectory(browser, data);
+    }
+
+    // Add folders and files
+    addFolderContents(browser, data);
+}
+
+function addParentDirectory(browser, data) {
+    const escapedParentPath = data.parent_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    browser.innerHTML += `
+                            <div class="folder-item" onclick="loadFolderContents('${escapedParentPath}')">
+                                <i class="bi bi-arrow-up"></i>..
+                            </div>
+                        `;
+}
+
+function addFolderContents(browser, data) {
+    data.contents.forEach(item => {
+        const icon = item.type === 'directory' ? 'bi-folder' : 'bi-image';
+        const escapedPath = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        browser.innerHTML += `
+                                <div class="folder-item" onclick="${item.type === 'directory' ? `loadFolderContents('${escapedPath}')` : ''}" ondblclick="${item.type === 'directory' ? `selectFolder('${escapedPath}')` : ''}">
+                                    <i class="bi ${icon}"></i>${item.name}
+                                </div>
+                            `;
+    });
+}
+
 // Load folder contents
 async function loadFolderContents(path = null) {
     try {
@@ -95,58 +160,9 @@ async function loadFolderContents(path = null) {
         breadcrumb.innerHTML = '';
 
         if (data.drives) {
-            // Windows drives
-            breadcrumb.innerHTML = '<li class="breadcrumb-item active">Drives</li>';
-            data.drives.forEach(drive => {
-                const escapedDrive = drive.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                browser.innerHTML += `
-                            <div class="folder-item" onclick="loadFolderContents('${escapedDrive}')">
-                                <i class="bi bi-hdd"></i>${drive}
-                            </div>
-                        `;
-            });
+            showDrives(breadcrumb, browser, data);
         } else {
-            // Folder contents
-            currentPath = data.current_path;
-
-            // Update breadcrumb
-            const pathParts = currentPath.split(/[\\/]/);
-            let currentBreadcrumb = '';
-            pathParts.forEach((part, index) => {
-                if (part) {
-                    // Check if the path contains backslashes to detect Windows
-                    const isWindows = currentPath.includes('\\');
-                    currentBreadcrumb += part + (isWindows ? '\\' : '/');
-                    const isLast = index === pathParts.length - 1;
-                    const escapedPath = currentBreadcrumb.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    breadcrumb.innerHTML += `
-                                <li class="breadcrumb-item ${isLast ? 'active' : ''}">
-                                    ${isLast ? part : `<a href="#" onclick="loadFolderContents('${escapedPath}')">${part}</a>`}
-                                </li>
-                            `;
-                }
-            });
-
-            // Add parent directory
-            if (data.parent_path) {
-                const escapedParentPath = data.parent_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                browser.innerHTML += `
-                            <div class="folder-item" onclick="loadFolderContents('${escapedParentPath}')">
-                                <i class="bi bi-arrow-up"></i>..
-                            </div>
-                        `;
-            }
-
-            // Add folders and files
-            data.contents.forEach(item => {
-                const icon = item.type === 'directory' ? 'bi-folder' : 'bi-image';
-                const escapedPath = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                browser.innerHTML += `
-                            <div class="folder-item" onclick="${item.type === 'directory' ? `loadFolderContents('${escapedPath}')` : ''}" ondblclick="${item.type === 'directory' ? `selectFolder('${escapedPath}')` : ''}">
-                                <i class="bi ${icon}"></i>${item.name}
-                            </div>
-                        `;
-            });
+            showFolderContents(breadcrumb, browser, data);
         }
     } catch (error) {
         console.error('Error loading folder contents:', error);

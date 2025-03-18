@@ -310,14 +310,13 @@ class ImageIndexer:
                 # Get images from specific folder
                 collection_name = self.folder_manager.get_collection_for_path(folder_path)
                 if collection_name:
-                    results.extend(await self._get_images_from_collection(collection_name, folder_path))
+                    results.extend(await self._get_images_from_collection(collection_name))
             else:
                 # Get images from all folders
                 for folder_info in self.folder_manager.get_all_folders():
                     if folder_info["is_valid"]:  # Only include images from valid folders
                         results.extend(await self._get_images_from_collection(
                             folder_info["collection_name"],
-                            folder_info["path"]
                         ))
             
             # Sort by indexed_at timestamp (newest first)
@@ -330,7 +329,7 @@ class ImageIndexer:
             traceback.print_exc()
             return []
     
-    async def _get_images_from_collection(self, collection_name: str, root_folder: str) -> List[Dict]:
+    async def _get_images_from_collection(self, collection_name: str) -> List[Dict]:
         """Get images from a specific collection"""
         try:
             response = self.qdrant.scroll(
