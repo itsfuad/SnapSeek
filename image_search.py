@@ -9,8 +9,8 @@ class ImageSearch:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using device: {self.device}")
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(self.device)
+        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
         
         # Initialize Qdrant client and folder manager
         self.qdrant = QdrantClientSingleton.get_instance()
@@ -24,14 +24,14 @@ class ImageSearch:
         normalized = (score + 1) / 2
         return normalized * 100
 
-    def filter_results(self, search_results: list, threshold: float = 0.5) -> List[Dict]:
+    def filter_results(self, search_results: list, threshold: float = 60) -> List[Dict]:
         """Filter and format search results"""
         results = []
         for scored_point in search_results:
             # Convert cosine similarity to percentage
             similarity = self.calculate_similarity_percentage(scored_point.score)
             
-            # Only include results above threshold (50% similarity)
+            # Only include results above threshold (60% similarity)
             if similarity >= threshold:
                 results.append({
                     "path": scored_point.payload["path"],
@@ -82,11 +82,11 @@ class ImageSearch:
                         query_vector=text_embedding.tolist(),
                         limit=collection_limit,  # Get more results from each collection
                         offset=0,  # Explicitly set offset
-                        score_threshold=0.0  # We'll filter results ourselves
+                        score_threshold=0.2  # Corresponds to 60% similarity after normalization
                     )
                     
                     # Filter and format results
-                    results = self.filter_results(search_result, threshold=50)
+                    results = self.filter_results(search_result) # Threshold is now default 60 in filter_results
                     all_results.extend(results)
                     print(f"Found {len(results)} matches in collection {collection_name}")
                 except Exception as e:
@@ -146,11 +146,11 @@ class ImageSearch:
                         query_vector=image_embedding.tolist(),
                         limit=collection_limit,  # Get more results from each collection
                         offset=0,  # Explicitly set offset
-                        score_threshold=0.0  # We'll filter results ourselves
+                        score_threshold=0.2  # Corresponds to 60% similarity after normalization
                     )
                     
                     # Filter and format results
-                    results = self.filter_results(search_result, threshold=50)
+                    results = self.filter_results(search_result) # Threshold is now default 60 in filter_results
                     all_results.extend(results)
                     print(f"Found {len(results)} matches in collection {collection_name}")
                 except Exception as e:

@@ -4,7 +4,7 @@ from typing import List, Optional
 import io
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Request, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
@@ -107,6 +107,37 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         await indexer.remove_websocket_connection(websocket)
+
+@app.get("/thumbnail/{folder_path:path}/{file_path:path}")
+async def serve_thumbnail(folder_path: str, file_path: str):
+    """Serve resized image thumbnails"""
+    try:
+        # Get folder info to verify it's an indexed folder
+        folder_info = indexer.folder_manager.get_folder_info(folder_path)
+        if not folder_info:
+            raise HTTPException(status_code=404, detail="Folder not found")
+
+        # Construct full file path
+        full_path = Path(folder_path) / file_path
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+
+        # Only serve image files
+        if full_path.suffix.lower() not in image_extensions:
+            raise HTTPException(status_code=400, detail="Invalid file type")
+
+        # Open image, resize, and convert to JPEG
+        img = Image.open(full_path)
+        img.thumbnail((200, 200))  # Resize maintaining aspect ratio
+
+        # Save to a byte stream
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format="JPEG")
+        img_byte_arr.seek(0)
+
+        return StreamingResponse(img_byte_arr, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})  # Cache for 1 hour
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/files/{folder_path:path}/{file_path:path}")
 async def serve_file(folder_path: str, file_path: str):
