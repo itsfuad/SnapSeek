@@ -67,6 +67,40 @@ function updateIndexingStatus(status) {
     details.textContent = statusText;
 }
 
+// IntersectionObserver for lazy loading images
+let imageObserver = null;
+
+function observeLazyLoadImages() {
+    const lazyLoadImages = document.querySelectorAll('img.lazy-load');
+
+    if (imageObserver) {
+        // Disconnect previous observer if any
+        imageObserver.disconnect();
+    }
+
+    imageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                const fullSrc = img.dataset.src;
+
+                if (fullSrc) {
+                    img.src = fullSrc;
+                    img.removeAttribute('data-src'); // Remove data-src to prevent re-processing
+                    img.classList.remove('lazy-load'); // Remove class to prevent re-observing
+                }
+                observer.unobserve(img); // Stop observing the image once loaded
+            }
+        });
+    }, {
+        rootMargin: '0px 0px 200px 0px' // Load images 200px before they enter viewport
+    });
+
+    lazyLoadImages.forEach(img => {
+        imageObserver.observe(img);
+    });
+}
+
 // Initialize folder browser
 async function initFolderBrowser() {
     folderModal = new bootstrap.Modal(document.getElementById('folderBrowserModal'));
@@ -276,12 +310,15 @@ async function loadImages(folder = null) {
             const card = document.createElement('div');
             card.className = 'image-card';
             card.innerHTML = `
-                        <img src="/files/${encodeURIComponent(image.root_folder)}/${encodeURIComponent(image.path)}" 
+                        <img class="lazy-load"
+                             src="/thumbnail/${encodeURIComponent(image.root_folder)}/${encodeURIComponent(image.path)}"
+                             data-src="/files/${encodeURIComponent(image.root_folder)}/${encodeURIComponent(image.path)}"
                              alt="${image.path}"
                              loading="lazy">
                     `;
             imageGrid.appendChild(card);
         });
+        observeLazyLoadImages(); // Initialize IntersectionObserver for new images
     } catch (error) {
         console.error('Error loading images:', error);
     }
@@ -317,13 +354,16 @@ async function searchImages(event) {
             const card = document.createElement('div');
             card.className = 'image-card';
             card.innerHTML = `
-                        <img src="/files/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}" 
+                        <img class="lazy-load"
+                             src="/thumbnail/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}"
+                             data-src="/files/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}"
                              alt="${result.path}"
                              loading="lazy">
                         <div class="similarity-score">${result.similarity}%</div>
                     `;
             imageGrid.appendChild(card);
         });
+        observeLazyLoadImages(); // Initialize IntersectionObserver for new images
     } catch (error) {
         console.error('Error searching images:', error);
         const imageGrid = document.getElementById('imageGrid');
@@ -359,13 +399,16 @@ async function searchByImage(event) {
             const card = document.createElement('div');
             card.className = 'image-card';
             card.innerHTML = `
-                        <img src="/files/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}" 
+                        <img class="lazy-load"
+                             src="/thumbnail/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}"
+                             data-src="/files/${encodeURIComponent(result.root_folder)}/${encodeURIComponent(result.path)}"
                              alt="${result.path}"
                              loading="lazy">
                         <div class="similarity-score">${result.similarity}%</div>
                     `;
             imageGrid.appendChild(card);
         });
+        observeLazyLoadImages(); // Initialize IntersectionObserver for new images
 
         // Reset file input
         event.target.value = '';

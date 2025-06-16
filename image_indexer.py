@@ -104,12 +104,18 @@ class ImageIndexer:
         await self.index_folder(folder_path)
         return folder_info
     
-    async def remove_folder(self, folder_path: str):
+    async def remove_folder(self, folder_path: str): # Changed to async def
         """Remove a folder from indexing"""
-        self.folder_manager.remove_folder(folder_path)
+        self.folder_manager.remove_folder(folder_path) # Remains synchronous
     
     async def index_folder(self, folder_path: str):
         """Index all images in a specific folder"""
+        if not self.model_initialized.is_set() or not self.model or not self.processor:
+            print("Model not initialized. Skipping indexing.")
+            self.status = IndexingStatus.IDLE
+            await self.broadcast_status()
+            return
+
         folder_path = Path(folder_path)
         if not folder_path.exists():
             print(f"Folder not found: {folder_path}")
@@ -176,9 +182,16 @@ class ImageIndexer:
     
     async def index_image(self, image_path: Path, root_folder: Path):
         """Index a single image"""
+        if not self.model_initialized.is_set() or not self.model or not self.processor:
+            print("Model not initialized. Skipping indexing image.")
+            # Optionally, set status and broadcast if this is a critical error path
+            # For now, just returning as index_folder would have already set status to IDLE
+            return
+
         try:
-            # Wait for model initialization
-            while not self.model_initialized.is_set():
+            # Wait for model initialization # This is somewhat redundant due to the check above,
+            # but kept for safety in case index_image is called directly elsewhere.
+            while not self.model_initialized.is_set(): # Redundant check, consider removing if only called by index_folder
                 await asyncio.sleep(0.1)
             
             # Get the collection for this path
@@ -292,8 +305,8 @@ class ImageIndexer:
         try:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             print(f"Using device: {self.device}")
-            self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
-            self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+            self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(self.device)
+            self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
             self.model_initialized.set()
             print("Model initialization complete")
         except Exception as e:

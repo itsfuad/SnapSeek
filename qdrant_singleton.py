@@ -3,7 +3,7 @@ from qdrant_client.http import models
 from pathlib import Path
 import os
 
-CURRENT_SCHEMA_VERSION = "1.0"  # Increment this when schema changes
+CURRENT_SCHEMA_VERSION = "1.1"  # Increment this when schema changes
 VECTOR_SIZE = 512  # CLIP embedding size
 
 class QdrantClientSingleton:
